@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/mpdred/healthcheck/pkg"
+	"github.com/mpdred/healthcheck/v2/pkg"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 )

@@ -1,4 +1,4 @@
-module github.com/mpdred/healthcheck
+module github.com/mpdred/healthcheck/v2
 
 go 1.19
 
