@@ -1,6 +1,12 @@
 name: Go
 
-on: [push]
+on:
+  push:
+    paths:
+      - 'go.*'
+      - '**/*.go'
+      - 'pkg/**'
+      - 'examples/**'
 
 jobs:
 
