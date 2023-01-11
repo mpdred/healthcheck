@@ -31,7 +31,7 @@ func main() {
 	h := pkg.NewHandler(9091, e, "mynamespace", prometheus.NewRegistry())
 	h.RegisterProbes(*dialProbe, *httpProbe, *customProbe)
 
-	h.Start()
+	go h.Start()
 
 	time.Sleep(10 * time.Minute)
 }

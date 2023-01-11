@@ -97,7 +97,7 @@ func (h *handler) Start() {
 		h.serverCancelCtx()
 	}()
 
-	<-h.serverCtx.Done()
+	// <-h.serverCtx.Done()
 }
 
 func (h *handler) Stop() {
