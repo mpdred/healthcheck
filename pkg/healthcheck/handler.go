@@ -27,7 +27,6 @@ type handler struct {
 	probes    map[string]Probe
 
 	http.ServeMux
-	muxCtx context.Context
 
 	server          *http.Server
 	serverCtx       context.Context
