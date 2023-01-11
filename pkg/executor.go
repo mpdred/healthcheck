@@ -16,7 +16,7 @@ type ExecutionResult struct {
 type executor struct{}
 
 func (e executor) Execute(ctx context.Context, probes []Probe) []ExecutionResult {
-	rr := make([]ExecutionResult, 0)
+	rr := make([]ExecutionResult, 0, len(probes))
 
 	for _, p := range probes {
 		err := p.Execute(ctx)
