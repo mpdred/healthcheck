@@ -1,0 +1,34 @@
+name: Version
+
+concurrency: version-${{ github.ref }}
+
+on:
+  push:
+    branches: [ main ]
+
+version:
+  runs-on: ubuntu-latest
+  container: mpdred/semantic-tagger:latest
+  steps:
+
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Set the version number
+      run: |
+        git config --global user.email "ci@welthee.com"
+        git config --global user.name "ci"
+        semtag -increment=auto -git-tag -push
+
+    - name: Persist the version number to disk
+      run: |
+        semtag | tail -1 > .version.txt
+        cat .version.txt
+
+    - name: Upload the version file
+      uses: actions/upload-artifact@v3
+      with:
+        name: version-file
+        path: .version.txt
+        retention-days: 30
