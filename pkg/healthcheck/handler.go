@@ -2,6 +2,7 @@ package healthcheck
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -17,7 +18,6 @@ type Handler interface {
 
 	RegisterProbes(probes ...Probe)
 	GetProbes(kind ProbeKind) []Probe
-	GetEndpoints() map[string]string
 	Execute(ctx context.Context, kind ProbeKind) []ExecutionResult
 }
 
@@ -41,8 +41,11 @@ func (h *handler) RegisterProbes(probes ...Probe) {
 	}
 }
 
-func (h *handler) GetEndpoints() map[string]string {
-	return h.endpoints
+func (h *handler) handleEndpoints(w http.ResponseWriter, r *http.Request) {
+	err := json.NewEncoder(w).Encode(h.endpoints)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (h *handler) GetProbes(kind ProbeKind) []Probe {
@@ -69,12 +72,12 @@ func (h *handler) handle(w http.ResponseWriter, r *http.Request, kind ProbeKind)
 
 	for _, r := range rr {
 		if r.Err != nil {
-			h.prometheusStatusGauge.WithLabelValues(string(r.Probe.GetName())).Set(1)
+			h.prometheusStatusGauge.WithLabelValues(r.Probe.GetName()).Set(1)
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
 
-		h.prometheusStatusGauge.WithLabelValues(string(r.Probe.GetName())).Set(0)
+		h.prometheusStatusGauge.WithLabelValues(r.Probe.GetName()).Set(0)
 	}
 
 	w.WriteHeader(204)
@@ -132,10 +135,10 @@ func NewHandler(port int, executor Executor, namespace string, registry promethe
 		probes: map[string]Probe{},
 	}
 
-	reg := prometheus.NewRegistry()
-	reg.MustRegister()
+	registry.MustRegister()
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/", h.handleEndpoints)
 	mux.HandleFunc(h.endpoints[string(Liveness)], h.handleLiveness)
 	mux.HandleFunc(h.endpoints[string(Readiness)], h.handleReadiness)
 
