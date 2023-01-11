@@ -2,6 +2,7 @@ package healthcheck
 
 import (
 	"context"
+	"sync"
 )
 
 type Executor interface {
@@ -16,15 +17,31 @@ type ExecutionResult struct {
 type executor struct{}
 
 func (e executor) Execute(ctx context.Context, probes []Probe) []ExecutionResult {
-	rr := make([]ExecutionResult, 0, len(probes))
+	var wg sync.WaitGroup
+	c := make(chan ExecutionResult)
+
+	wg.Add(len(probes))
+
+	go func() {
+		wg.Wait()
+		close(c)
+	}()
 
 	for _, p := range probes {
-		err := p.Execute(ctx)
-		r := ExecutionResult{
-			Probe: p,
-			Err:   err,
-		}
+		go func(p Probe) {
+			defer wg.Done()
+			err := p.Execute(ctx)
+			r := ExecutionResult{
+				Probe: p,
+				Err:   err,
+			}
 
+			c <- r
+		}(p)
+	}
+
+	rr := make([]ExecutionResult, 0, len(probes))
+	for r := range c {
 		rr = append(rr, r)
 	}
 
