@@ -2,6 +2,9 @@ name: Version
 
 concurrency: version-${{ github.ref }}
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ main ]
