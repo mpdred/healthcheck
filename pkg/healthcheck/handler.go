@@ -174,11 +174,13 @@ func NewHandler(port int, executor Executor, namespace string, registry promethe
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 
+	type serverAddr struct{}
+
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
 		Handler: mux,
 		BaseContext: func(l net.Listener) context.Context {
-			ctx = context.WithValue(ctx, "serverAddr", l.Addr().String())
+			ctx = context.WithValue(ctx, serverAddr{}, l.Addr().String())
 			return ctx
 		},
 	}
