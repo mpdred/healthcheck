@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -17,11 +18,16 @@ type Handler interface {
 	Worker
 
 	RegisterProbes(probes ...Probe)
-	GetProbes(kind ProbeKind) []Probe
+	GetProbe(name string) *Probe
+	UnregisterProbes(names ...string)
+
+	GetProbesByKind(kind ProbeKind) []Probe
 	Execute(ctx context.Context, kind ProbeKind) []ExecutionResult
 }
 
 type handler struct {
+	mu sync.Mutex
+
 	endpoints map[string]string
 	executor  Executor
 	probes    map[string]Probe
@@ -35,9 +41,30 @@ type handler struct {
 	prometheusStatusGauge *prometheus.GaugeVec
 }
 
+func (h *handler) GetProbe(name string) *Probe {
+	p, ok := h.probes[name]
+	if !ok {
+		return nil
+	}
+
+	return &p
+}
+
 func (h *handler) RegisterProbes(probes ...Probe) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	for _, p := range probes {
 		h.probes[p.GetName()] = p
+	}
+}
+
+func (h *handler) UnregisterProbes(names ...string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for _, name := range names {
+		delete(h.probes, name)
 	}
 }
 
@@ -48,7 +75,7 @@ func (h *handler) handleEndpoints(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) GetProbes(kind ProbeKind) []Probe {
+func (h *handler) GetProbesByKind(kind ProbeKind) []Probe {
 	pp := make([]Probe, 0)
 	for _, p := range h.probes {
 		if p.GetKind() == kind {
@@ -84,7 +111,7 @@ func (h *handler) handle(w http.ResponseWriter, r *http.Request, kind ProbeKind)
 }
 
 func (h *handler) Execute(ctx context.Context, kind ProbeKind) []ExecutionResult {
-	probesToExecute := h.GetProbes(kind)
+	probesToExecute := h.GetProbesByKind(kind)
 	return h.executor.Execute(ctx, probesToExecute)
 }
 
