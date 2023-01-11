@@ -35,13 +35,3 @@ func (p Probe) Execute(ctx context.Context) error {
 
 	return err
 }
-
-func NewProbe(name string, fn ProbeCheckFn, kind ProbeKind) *Probe {
-	c := &Probe{
-		name:    name,
-		checkFn: fn,
-		kind:    kind,
-	}
-
-	return c
-}

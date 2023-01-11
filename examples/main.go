@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"time"
 
 	"github.com/mpdred/healthcheck/v2/pkg/healthcheck"
@@ -11,31 +11,52 @@ import (
 )
 
 func main() {
-	// Create some probes
-	probeFnFactory := healthcheck.NewProbeFnFactory()
-
-	dialCheckFn := probeFnFactory.TCPDialWithTimeout("google.com:443", 5*time.Second)
-	dialProbe := healthcheck.NewProbe("dial google", dialCheckFn, healthcheck.Liveness)
-
-	httpCheckFn := probeFnFactory.HTTPGetCheck("https://www.google.com", 5*time.Second)
-	httpProbe := healthcheck.NewProbe("get google", httpCheckFn, healthcheck.Readiness)
-
-	customProbe := healthcheck.NewProbe(
-		"bar baz",
-		func(ctx context.Context) error {
-			return errors.New("an unexpected error has occurred")
-		},
-		healthcheck.Readiness)
-
-	// Create server
+	log.Println("create health check server...")
 	e := healthcheck.NewExecutor()
-	h := healthcheck.NewHandler(9091, e, "mynamespace", prometheus.NewRegistry())
-	h.RegisterProbes(*dialProbe, *httpProbe, *customProbe)
+	h := healthcheck.NewHandler(9999, e, "mynamespace", prometheus.NewRegistry())
 
-	fmt.Println("start healthcheck server...")
+	log.Println("start healthcheck server...")
 	go h.Start()
 	defer h.Stop()
-	time.Sleep(10 * time.Second)
-	fmt.Println("doing other things")
-	fmt.Println("stopping main()")
+
+	// Create some probes
+	deadmansProbe := healthcheck.NewProbeBuilder().BuildDeadmansSnitch()
+
+	dialCheckProbe := healthcheck.NewProbeBuilder().
+		WithTCPDialWithTimeoutCheck("google.com:443").
+		WithKind(healthcheck.Liveness).
+		Build()
+
+	httpCheckProbe := healthcheck.NewProbeBuilder().
+		WithHTTPGetCheck("https://www.google.com").
+		Build()
+
+	customProbe := healthcheck.NewProbeBuilder().
+		WithName("my custom probe").
+		WithKind(healthcheck.Readiness).
+		WithCustomCheck(func(context.Context) error {
+			return errors.New("an unexpected error has occurred")
+		}).
+		MustBuild()
+
+	// Register the probes
+	h.RegisterProbes(*deadmansProbe, *dialCheckProbe, *httpCheckProbe, *customProbe)
+
+	log.Println("doing other things...")
+	time.Sleep(5 * time.Minute)
+	log.Println("main() finished")
+
+	// $ curl localhost:9999/live && curl localhost:9999/ready
+	//
+	// $ curl localhost:9999/metrics | grep health
+	//
+	//   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+	//                                 Dload  Upload   Total   Spent    Left  Speed
+	// 100  5162    0  5162    0     0  1138k      0 --:--:-- --:--:-- --:--:-- 5041k
+	// # HELP mynamespace_healthcheck_status Current check status (0=success, 1=failure)
+	// # TYPE mynamespace_healthcheck_status gauge
+	// mynamespace_healthcheck_status{probe="dead man's snitch"} 0
+	// mynamespace_healthcheck_status{probe="http get"} 0
+	// mynamespace_healthcheck_status{probe="my custom probe"} 1
+	// mynamespace_healthcheck_status{probe="tcp dial"} 0
 }
