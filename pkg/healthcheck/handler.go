@@ -33,8 +33,6 @@ type handler struct {
 	serverCtx       context.Context
 	serverCancelCtx context.CancelFunc
 
-	prometheusNamespace   string
-	prometheusRegistry    prometheus.Registerer
 	prometheusStatusGauge *prometheus.GaugeVec
 }
 
@@ -110,9 +108,9 @@ func (h *handler) Stop() {
 	h.serverCtx.Done()
 }
 
-func (h *handler) initGauges() {
+func (h *handler) initGauges(namespace string) {
 	h.prometheusStatusGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: h.prometheusNamespace,
+		Namespace: namespace,
 		Subsystem: "healthcheck",
 		Name:      "status",
 		Help:      "Current check status (0=success, 1=failure)",
@@ -132,9 +130,7 @@ func NewHandler(port int, executor Executor, namespace string, registry promethe
 			string(Readiness): "/ready",
 			MetricsName:       MetricsEndpoint,
 		},
-		prometheusNamespace: namespace,
-		probes:              map[string]Probe{},
-		prometheusRegistry:  registry,
+		probes: map[string]Probe{},
 	}
 
 	reg := prometheus.NewRegistry()
@@ -144,8 +140,8 @@ func NewHandler(port int, executor Executor, namespace string, registry promethe
 	mux.HandleFunc(h.endpoints[string(Liveness)], h.handleLiveness)
 	mux.HandleFunc(h.endpoints[string(Readiness)], h.handleReadiness)
 
-	h.initGauges()
 	mux.Handle(MetricsEndpoint, promhttp.Handler())
+	h.initGauges(namespace)
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
 

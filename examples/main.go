@@ -34,10 +34,8 @@ func main() {
 
 	fmt.Println("start healthcheck server...")
 	go h.Start()
-	time.Sleep(5 * time.Second)
-	h.Stop()
-	fmt.Println("healthcheck server is stopped")
-
+	defer h.Stop()
+	time.Sleep(10 * time.Second)
 	fmt.Println("doing other things")
-	time.Sleep(5 * time.Minute)
+	fmt.Println("stopping main()")
 }
