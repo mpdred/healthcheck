@@ -1,4 +1,4 @@
-package pkg
+package healthcheck
 
 type Worker interface {
 	Start()

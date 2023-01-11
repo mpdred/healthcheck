@@ -1,4 +1,4 @@
-package pkg
+package healthcheck
 
 import (
 	"context"
@@ -92,16 +92,22 @@ func (h *handler) Start() {
 	go func() {
 		err := h.server.ListenAndServe()
 		if err != nil {
-			fmt.Printf("error listening for server: %s\n", err)
+			fmt.Printf("error listening for health check server: %s\n", err)
 		}
 		h.serverCancelCtx()
 	}()
 
-	// <-h.serverCtx.Done()
+	<-h.serverCtx.Done()
 }
 
 func (h *handler) Stop() {
+	err := h.server.Close()
+	if err != nil {
+		fmt.Printf("error closing health check server: %s\n", err)
+	}
+
 	h.serverCancelCtx()
+	h.serverCtx.Done()
 }
 
 func (h *handler) initGauges() {
