@@ -17,15 +17,47 @@ type Handler interface {
 	http.Handler
 	Worker
 
-	RegisterProbes(probes ...Probe)
+	RegisterProbes(probes ...*Probe)
 	GetProbe(name string) *Probe
 	UnregisterProbes(names ...string)
 
 	// GetProbesByKind returns all probes that have a matching ProbeKind.
 	//
 	// ProbeKind = Health returns all probes.
-	GetProbesByKind(kind ProbeKind) []Probe
+	GetProbesByKind(kind ProbeKind) []*Probe
+
+	// Execute all the probes of this ProbeKind.
+	//
+	// This can be triggered on demand or when a http server isn't started.
 	Execute(ctx context.Context, kind ProbeKind) []ExecutionResult
+
+	// HandleHealth executes all the Probe(s)
+	// and updates the Prometheus Gauge(0=success, 1=failure).
+	// Probes that have completed their ProbeCheckFn successfully won't return an error.
+	//
+	// Returns http.StatusOK and the list of ExecutionResult(s).
+	HandleHealth(w http.ResponseWriter, r *http.Request)
+
+	// HandleLiveness executes all the Probe(s) of ProbeKind = Liveness
+	// and updates the Prometheus Gauge (0=success, 1=failure).
+	//
+	// Returns http.StatusOK if all the ProbeCheckFn(s) have completed successfully,
+	// or http.StatusServiceUnavailable when at least one probe has failed.
+	HandleLiveness(w http.ResponseWriter, r *http.Request)
+
+	// HandleReadiness executes all the Probe(s) of ProbeKind = Readiness
+	// and updates the Prometheus Gauge (0=success, 1=failure).
+	//
+	// Returns http.StatusOK if all the ProbeCheckFn(s) have completed successfully,
+	// or http.StatusServiceUnavailable when at least one probe has failed.
+	HandleReadiness(w http.ResponseWriter, r *http.Request)
+
+	// HandleStartup executes all the Probe(s) of ProbeKind = Startup
+	// and updates the Prometheus Gauge (0=success, 1=failure).
+	//
+	// Returns http.StatusOK if all the ProbeCheckFn(s) have completed successfully,
+	// or http.StatusServiceUnavailable when at least one probe has failed.
+	HandleStartup(w http.ResponseWriter, r *http.Request)
 }
 
 type handler struct {
@@ -33,7 +65,7 @@ type handler struct {
 
 	endpoints map[string]string
 	executor  Executor
-	probes    map[string]Probe
+	probes    map[string]*Probe
 
 	http.ServeMux
 
@@ -50,10 +82,10 @@ func (h *handler) GetProbe(name string) *Probe {
 		return nil
 	}
 
-	return &p
+	return p
 }
 
-func (h *handler) RegisterProbes(probes ...Probe) {
+func (h *handler) RegisterProbes(probes ...*Probe) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -78,8 +110,8 @@ func (h *handler) handleEndpoints(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *handler) GetProbesByKind(kind ProbeKind) []Probe {
-	pp := make([]Probe, 0)
+func (h *handler) GetProbesByKind(kind ProbeKind) []*Probe {
+	pp := make([]*Probe, 0)
 	for _, p := range h.probes {
 		if kind == Health {
 			pp = append(pp, p)
@@ -94,52 +126,45 @@ func (h *handler) GetProbesByKind(kind ProbeKind) []Probe {
 	return pp
 }
 
-func (h *handler) handleHealth(w http.ResponseWriter, r *http.Request) {
-	rr := h.executionResults(w, r, Health)
+func (h *handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
+	resList := h.Execute(r.Context(), Health)
+	h.updatePrometheusGauge(resList)
 
-	err := json.NewEncoder(w).Encode(rr)
+	err := json.NewEncoder(w).Encode(resList)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func (h *handler) handleLiveness(w http.ResponseWriter, r *http.Request) {
-	h.executionResults(w, r, Liveness)
+func (h *handler) HandleLiveness(w http.ResponseWriter, r *http.Request) {
+	h.handle(w, r, Liveness)
 }
 
-func (h *handler) handleReadiness(w http.ResponseWriter, r *http.Request) {
-	h.executionResults(w, r, Readiness)
+func (h *handler) HandleReadiness(w http.ResponseWriter, r *http.Request) {
+	h.handle(w, r, Readiness)
 }
 
-func (h *handler) handleStartup(w http.ResponseWriter, r *http.Request) {
-	h.executionResults(w, r, Startup)
+func (h *handler) HandleStartup(w http.ResponseWriter, r *http.Request) {
+	h.handle(w, r, Startup)
 }
 
-func (h *handler) executionResults(w http.ResponseWriter, r *http.Request, kind ProbeKind) []ExecutionResult {
-	rr := h.Execute(r.Context(), kind)
+func (h *handler) handle(w http.ResponseWriter, r *http.Request, kind ProbeKind) {
+	resList := h.Execute(r.Context(), kind)
+	h.updatePrometheusGauge(resList)
 
 	var hasAtLeastOneErr bool
-	for _, r := range rr {
-		p := r.Probe
-		if r.Err != "" {
-			h.prometheusStatusGauge.WithLabelValues(string(p.Kind), p.Name).Set(1)
-
+	for _, res := range resList {
+		p := res.Probe
+		if res.Err != "" {
 			if !p.IsInformationalOnly {
 				hasAtLeastOneErr = true
-				continue
 			}
 		}
-
-		h.prometheusStatusGauge.WithLabelValues(string(p.Kind), p.Name).Set(0)
 	}
 
 	if hasAtLeastOneErr {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		return nil
-	}
-
-	if kind == Health {
-		return rr
+		return
 	}
 
 	w.WriteHeader(200)
@@ -147,8 +172,18 @@ func (h *handler) executionResults(w http.ResponseWriter, r *http.Request, kind 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
 
-	return rr
+func (h *handler) updatePrometheusGauge(resList []ExecutionResult) {
+	for _, res := range resList {
+		p := res.Probe
+		if res.Err != "" {
+			h.prometheusStatusGauge.WithLabelValues(string(p.Kind), p.Name).Set(1)
+			continue
+		}
+
+		h.prometheusStatusGauge.WithLabelValues(string(p.Kind), p.Name).Set(0)
+	}
 }
 
 func (h *handler) Execute(ctx context.Context, kind ProbeKind) []ExecutionResult {
@@ -206,17 +241,17 @@ func NewHandler(port int, executor Executor, namespace string, registry promethe
 			string(Readiness): "/ready",
 			string(Startup):   StartupEndpoint,
 		},
-		probes: map[string]Probe{},
+		probes: map[string]*Probe{},
 	}
 
 	registry.MustRegister()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.handleEndpoints)
-	mux.HandleFunc(h.endpoints[string(Health)], h.handleHealth)
-	mux.HandleFunc(h.endpoints[string(Liveness)], h.handleLiveness)
-	mux.HandleFunc(h.endpoints[string(Readiness)], h.handleReadiness)
-	mux.HandleFunc(h.endpoints[string(Startup)], h.handleStartup)
+	mux.HandleFunc(h.endpoints[string(Health)], h.HandleHealth)
+	mux.HandleFunc(h.endpoints[string(Liveness)], h.HandleLiveness)
+	mux.HandleFunc(h.endpoints[string(Readiness)], h.HandleReadiness)
+	mux.HandleFunc(h.endpoints[string(Startup)], h.HandleStartup)
 
 	mux.Handle(MetricsEndpoint, promhttp.Handler())
 	h.initGauges(namespace)

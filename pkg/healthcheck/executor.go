@@ -6,7 +6,8 @@ import (
 )
 
 type Executor interface {
-	Execute(ctx context.Context, probes []Probe) []ExecutionResult
+	// Execute the ProbeCheckFn of the Probe(s).
+	Execute(ctx context.Context, probes []*Probe) []ExecutionResult
 }
 
 type ExecutionResult struct {
@@ -16,7 +17,7 @@ type ExecutionResult struct {
 
 type executor struct{}
 
-func (e executor) Execute(ctx context.Context, probes []Probe) []ExecutionResult {
+func (e executor) Execute(ctx context.Context, probes []*Probe) []ExecutionResult {
 	var wg sync.WaitGroup
 	c := make(chan ExecutionResult)
 
@@ -28,10 +29,10 @@ func (e executor) Execute(ctx context.Context, probes []Probe) []ExecutionResult
 	}()
 
 	for _, p := range probes {
-		go func(p Probe) {
+		go func(p *Probe) {
 			defer wg.Done()
 			r := ExecutionResult{
-				Probe: p,
+				Probe: *p,
 			}
 
 			err := p.Execute(ctx)

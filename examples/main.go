@@ -42,7 +42,7 @@ func main() {
 		MustBuild()
 
 	// Register the probes
-	h.RegisterProbes(*deadmansProbe, *dialCheckProbe, *httpCheckProbe, *customProbe)
+	h.RegisterProbes(deadmansProbe, dialCheckProbe, httpCheckProbe, customProbe)
 
 	log.Println("doing other things...")
 	time.Sleep(5 * time.Minute)

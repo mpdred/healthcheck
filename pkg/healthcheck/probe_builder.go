@@ -23,9 +23,12 @@ import (
 // It has a default timeout for the predefined checks.
 type ProbeBuilder interface {
 	WithKind(k ProbeKind) ProbeBuilder
+
+	// WithName sets a friendly name for the probe.
 	WithName(n string) ProbeBuilder
 	WithSetOptional(bool) ProbeBuilder
 
+	// WithCustomCheck allows you to define your own function that is to be executed.
 	WithCustomCheck(fn ProbeCheckFn) ProbeBuilder
 
 	WithDatabaseConnectionCheck(database *sql.DB) ProbeBuilder
@@ -52,6 +55,9 @@ type ProbeBuilder interface {
 	//
 	// Usually an alert is created for its absence.
 	BuildDeadmansSnitch() *Probe
+
+	// BuildForComponents creates probes base on the map's boolean values.
+	BuildForComponents(kind ProbeKind, componentsReadinessMap map[string]bool) func(roles map[string]bool) []Probe
 }
 
 type probeBuilder struct {
@@ -278,4 +284,37 @@ func (b *probeBuilder) BuildDeadmansSnitch() *Probe {
 	b.probe.Kind = Liveness
 
 	return b.probe
+}
+
+func (b *probeBuilder) BuildForComponents(kind ProbeKind, componentsReadinessMap map[string]bool) func(roles map[string]bool) []Probe {
+	probeFns := func(roles map[string]bool) []Probe {
+		pp := make([]Probe, 0)
+
+		for component, isReady := range roles {
+			if !isReady {
+				continue
+			}
+
+			c := component
+			fn := func(ctx context.Context) error {
+				if !componentsReadinessMap[c] {
+					return errors.New("readiness for component set to 'false'")
+				}
+
+				return nil
+			}
+
+			p := NewProbeBuilder().
+				WithName(fmt.Sprintf("component %s", component)).
+				WithKind(kind).
+				WithCustomCheck(fn).
+				Build()
+
+			pp = append(pp, *p)
+		}
+
+		return pp
+	}
+
+	return probeFns
 }
