@@ -10,8 +10,8 @@ type Executor interface {
 }
 
 type ExecutionResult struct {
-	Probe Probe
-	Err   error
+	Probe Probe  `json:"probe"`
+	Err   string `json:"err,omitempty"`
 }
 
 type executor struct{}
@@ -30,10 +30,13 @@ func (e executor) Execute(ctx context.Context, probes []Probe) []ExecutionResult
 	for _, p := range probes {
 		go func(p Probe) {
 			defer wg.Done()
-			err := p.Execute(ctx)
 			r := ExecutionResult{
 				Probe: p,
-				Err:   err,
+			}
+
+			err := p.Execute(ctx)
+			if err != nil {
+				r.Err = err.Error()
 			}
 
 			c <- r

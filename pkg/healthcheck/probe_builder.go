@@ -70,13 +70,13 @@ func NewProbeBuilder() ProbeBuilder {
 }
 
 func (b *probeBuilder) WithKind(k ProbeKind) ProbeBuilder {
-	b.probe.kind = k
+	b.probe.Kind = k
 
 	return b
 }
 
 func (b *probeBuilder) WithName(n string) ProbeBuilder {
-	b.probe.name = n
+	b.probe.Name = n
 
 	return b
 }
@@ -101,7 +101,7 @@ func (b *probeBuilder) WithDatabaseConnectionCheck(database *sql.DB) ProbeBuilde
 
 	b.probe.checkFn = fn
 
-	if strings.TrimSpace(b.probe.name) == "" {
+	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "sql database"
 		b.WithName(defaultName)
 	}
@@ -130,7 +130,7 @@ func (b *probeBuilder) WithDNSResolveCheck(host string) ProbeBuilder {
 
 	b.probe.checkFn = fn
 
-	if strings.TrimSpace(b.probe.name) == "" {
+	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "dns resolve"
 		b.WithName(defaultName)
 	}
@@ -170,7 +170,7 @@ func (b *probeBuilder) WithHTTPGetCheck(url string) ProbeBuilder {
 
 	b.probe.checkFn = fn
 
-	if strings.TrimSpace(b.probe.name) == "" {
+	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "http get"
 		b.WithName(defaultName)
 	}
@@ -187,7 +187,7 @@ func (b *probeBuilder) WithOpensearchConnectionCheck(client *opensearch.Client) 
 
 	b.probe.checkFn = fn
 
-	if strings.TrimSpace(b.probe.name) == "" {
+	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "opensearch"
 		b.WithName(defaultName)
 	}
@@ -204,7 +204,7 @@ func (b *probeBuilder) WithRedisConnectionCheck(client *redis.Client) ProbeBuild
 
 	b.probe.checkFn = fn
 
-	if strings.TrimSpace(b.probe.name) == "" {
+	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "redis"
 		b.WithName(defaultName)
 	}
@@ -224,7 +224,7 @@ func (b *probeBuilder) WithTCPDialWithTimeoutCheck(address string) ProbeBuilder 
 
 	b.probe.checkFn = fn
 
-	if strings.TrimSpace(b.probe.name) == "" {
+	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "tcp dial"
 		b.WithName(defaultName)
 	}
@@ -233,10 +233,10 @@ func (b *probeBuilder) WithTCPDialWithTimeoutCheck(address string) ProbeBuilder 
 }
 
 func (b *probeBuilder) Build() *Probe {
-	b.probe.name = strings.TrimSpace(b.probe.name)
+	b.probe.Name = strings.TrimSpace(b.probe.Name)
 
-	if strings.EqualFold(string(b.probe.kind), "") {
-		b.probe.kind = Health
+	if strings.EqualFold(string(b.probe.Kind), "") {
+		b.probe.Kind = Health
 	}
 
 	return b.probe
@@ -245,11 +245,11 @@ func (b *probeBuilder) Build() *Probe {
 func (b *probeBuilder) MustBuild() *Probe {
 	p := b.Build()
 
-	if strings.TrimSpace(string(p.GetKind())) == "" {
+	if strings.TrimSpace(string(p.Kind)) == "" {
 		panic("no probe kind")
 	}
 
-	if strings.TrimSpace(p.GetName()) == "" {
+	if strings.TrimSpace(p.Name) == "" {
 		panic("no probe name")
 	}
 
@@ -268,7 +268,7 @@ func (b *probeBuilder) BuildDeadmansSnitch() *Probe {
 	const defaultName = "dead man's snitch"
 	b.WithName(defaultName)
 
-	b.probe.kind = Liveness
+	b.probe.Kind = Liveness
 
 	return b.probe
 }

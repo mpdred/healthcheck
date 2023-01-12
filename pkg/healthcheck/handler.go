@@ -58,7 +58,7 @@ func (h *handler) RegisterProbes(probes ...Probe) {
 	defer h.mu.Unlock()
 
 	for _, p := range probes {
-		h.probes[p.GetName()] = p
+		h.probes[p.Name] = p
 	}
 }
 
@@ -86,7 +86,7 @@ func (h *handler) GetProbesByKind(kind ProbeKind) []Probe {
 			continue
 		}
 
-		if p.GetKind() == kind {
+		if p.Kind == kind {
 			pp = append(pp, p)
 		}
 	}
@@ -95,42 +95,55 @@ func (h *handler) GetProbesByKind(kind ProbeKind) []Probe {
 }
 
 func (h *handler) handleHealth(w http.ResponseWriter, r *http.Request) {
-	h.handle(w, r, Health)
+	rr := h.executionResults(w, r, Health)
+
+	err := json.NewEncoder(w).Encode(rr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (h *handler) handleLiveness(w http.ResponseWriter, r *http.Request) {
-	h.handle(w, r, Liveness)
+	h.executionResults(w, r, Liveness)
 }
 
 func (h *handler) handleReadiness(w http.ResponseWriter, r *http.Request) {
-	h.handle(w, r, Readiness)
+	h.executionResults(w, r, Readiness)
 }
 
 func (h *handler) handleStartup(w http.ResponseWriter, r *http.Request) {
-	h.handle(w, r, Startup)
+	h.executionResults(w, r, Startup)
 }
 
-func (h *handler) handle(w http.ResponseWriter, r *http.Request, kind ProbeKind) {
+func (h *handler) executionResults(w http.ResponseWriter, r *http.Request, kind ProbeKind) []ExecutionResult {
 	rr := h.Execute(r.Context(), kind)
 
 	var hasAtLeastOneErr bool
 	for _, r := range rr {
-		if r.Err != nil {
-			h.prometheusStatusGauge.WithLabelValues(string(r.Probe.GetKind()), r.Probe.GetName()).Set(1)
-			hasAtLeastOneErr = true
-			continue
+		p := r.Probe
+		if r.Err != "" {
+			h.prometheusStatusGauge.WithLabelValues(string(p.Kind), p.Name).Set(1)
 		}
 
-		h.prometheusStatusGauge.WithLabelValues(string(r.Probe.GetKind()), r.Probe.GetName()).Set(0)
+		h.prometheusStatusGauge.WithLabelValues(string(p.Kind), p.Name).Set(0)
 	}
 
 	if hasAtLeastOneErr {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		return
+		return nil
+	}
+
+	if kind == Health {
+		return rr
 	}
 
 	w.WriteHeader(200)
-	w.Write([]byte("OK"))
+	_, err := w.Write([]byte("OK"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	return rr
 }
 
 func (h *handler) Execute(ctx context.Context, kind ProbeKind) []ExecutionResult {

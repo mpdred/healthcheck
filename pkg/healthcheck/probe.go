@@ -20,16 +20,8 @@ const (
 
 type Probe struct {
 	checkFn ProbeCheckFn
-	kind    ProbeKind
-	name    string
-}
-
-func (p Probe) GetKind() ProbeKind {
-	return p.kind
-}
-
-func (p Probe) GetName() string {
-	return p.name
+	Kind    ProbeKind `json:"kind"`
+	Name    string    `json:"name"`
 }
 
 func (p Probe) Execute(ctx context.Context) error {
