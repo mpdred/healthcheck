@@ -286,18 +286,18 @@ func (b *probeBuilder) BuildDeadmansSnitch() *Probe {
 	return b.probe
 }
 
-func (b *probeBuilder) BuildForComponents(kind ProbeKind, componentsOKMap map[string]bool) func(components map[string]bool) []*Probe {
-	probeFns := func(roles map[string]bool) []*Probe {
+func (b *probeBuilder) BuildForComponents(kind ProbeKind, componentsEnabledMap map[string]bool) func(components map[string]bool) []*Probe {
+	probeFns := func(componentsStatusMap map[string]bool) []*Probe {
 		pp := make([]*Probe, 0)
 
-		for component, isReady := range roles {
-			if !isReady {
+		for component, isActive := range componentsStatusMap {
+			if !isActive {
 				continue
 			}
 
 			c := component
 			fn := func(ctx context.Context) error {
-				if !componentsOKMap[c] {
+				if !componentsEnabledMap[c] {
 					return errors.New("readiness for component set to 'false'")
 				}
 
