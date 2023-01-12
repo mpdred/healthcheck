@@ -57,7 +57,7 @@ type ProbeBuilder interface {
 	BuildDeadmansSnitch() *Probe
 
 	// BuildForComponents creates probes base on the map's boolean values.
-	BuildForComponents(kind ProbeKind, componentsReadinessMap map[string]bool) func(roles map[string]bool) []*Probe
+	BuildForComponents(kind ProbeKind, components []string, componentsStatusMap map[string]bool) []*Probe
 }
 
 type probeBuilder struct {
@@ -286,35 +286,28 @@ func (b *probeBuilder) BuildDeadmansSnitch() *Probe {
 	return b.probe
 }
 
-func (b *probeBuilder) BuildForComponents(kind ProbeKind, componentsEnabledMap map[string]bool) func(components map[string]bool) []*Probe {
-	probeFns := func(componentsStatusMap map[string]bool) []*Probe {
-		pp := make([]*Probe, 0)
+func (b *probeBuilder) BuildForComponents(kind ProbeKind, components []string, componentsStatusMap map[string]bool) []*Probe {
+	pp := make([]*Probe, 0)
 
-		for component, isActive := range componentsStatusMap {
-			if !isActive {
-				continue
+	for _, component := range components {
+		c := component
+		fn := func(ctx context.Context) error {
+			if !componentsStatusMap[c] {
+				return errors.New("readiness for component set to 'false'")
 			}
 
-			c := component
-			fn := func(ctx context.Context) error {
-				if !componentsEnabledMap[c] {
-					return errors.New("readiness for component set to 'false'")
-				}
-
-				return nil
-			}
-
-			p := NewProbeBuilder().
-				WithName(fmt.Sprintf("component %s", component)).
-				WithKind(kind).
-				WithCustomCheck(fn).
-				Build()
-
-			pp = append(pp, p)
+			return nil
 		}
 
-		return pp
+		p := NewProbeBuilder().
+			WithName(fmt.Sprintf("component %s", component)).
+			WithKind(kind).
+			WithCustomCheck(fn).
+			Build()
+
+		pp = append(pp, p)
 	}
 
-	return probeFns
+	return pp
+
 }
