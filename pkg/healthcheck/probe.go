@@ -34,7 +34,7 @@ type Probe struct {
 
 	// IsInformationalOnly describes if the Probe should ignore errors on execution failure,
 	// thus always completing successfully.
-	IsInformationalOnly bool `json:"IsInformationalOnly"`
+	IsInformationalOnly bool `json:"IsInformationalOnly,omitempty"`
 }
 
 func (p Probe) Execute(ctx context.Context) error {
