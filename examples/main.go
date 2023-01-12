@@ -24,16 +24,17 @@ func main() {
 
 	dialCheckProbe := healthcheck.NewProbeBuilder().
 		WithTCPDialWithTimeoutCheck("google.com:443").
-		WithKind(healthcheck.Liveness).
+		WithKind(healthcheck.Startup).
 		Build()
 
 	httpCheckProbe := healthcheck.NewProbeBuilder().
 		WithHTTPGetCheck("https://www.google.com").
+		WithKind(healthcheck.Readiness).
 		Build()
 
 	customProbe := healthcheck.NewProbeBuilder().
 		WithName("my custom probe").
-		WithKind(healthcheck.Readiness).
+		WithKind(healthcheck.Health).
 		WithCustomCheck(func(context.Context) error {
 			return errors.New("an unexpected error has occurred")
 		}).
@@ -46,7 +47,7 @@ func main() {
 	time.Sleep(5 * time.Minute)
 	log.Println("main() finished")
 
-	// $ curl localhost:9999/live && curl localhost:9999/ready
+	// $ curl localhost:9999/health
 	//
 	// $ curl localhost:9999/metrics | grep health
 	//

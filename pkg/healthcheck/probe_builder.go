@@ -36,15 +36,15 @@ type ProbeBuilder interface {
 
 	// Build the probe as requested.
 	//
-	// The ProbeKind is set to Readiness by default.
+	// The ProbeKind is set to Health by default.
 	//
 	// Note: No checks are performed, so it allows for objects with undefined fields.
 	Build() *Probe
 
-	// MustBuild the probe as requested,
+	// MustBuild uses Build to build the probe as requested,
 	// and panic if there are any fields with undefined fields.
 	//
-	// The ProbeKind is set to Readiness by default.
+	// The ProbeKind is set to Health by default.
 	MustBuild() *Probe
 
 	// BuildDeadmansSnitch creates a Probe that always executes without errors.
@@ -236,7 +236,7 @@ func (b *probeBuilder) Build() *Probe {
 	b.probe.name = strings.TrimSpace(b.probe.name)
 
 	if strings.EqualFold(string(b.probe.kind), "") {
-		b.probe.kind = Readiness
+		b.probe.kind = Health
 	}
 
 	return b.probe
@@ -249,7 +249,7 @@ func (b *probeBuilder) MustBuild() *Probe {
 		panic("no probe kind")
 	}
 
-	if strings.TrimSpace(string(p.GetName())) == "" {
+	if strings.TrimSpace(p.GetName()) == "" {
 		panic("no probe name")
 	}
 

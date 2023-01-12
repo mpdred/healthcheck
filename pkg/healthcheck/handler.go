@@ -21,6 +21,9 @@ type Handler interface {
 	GetProbe(name string) *Probe
 	UnregisterProbes(names ...string)
 
+	// GetProbesByKind returns all probes that have a matching ProbeKind.
+	//
+	// ProbeKind = Health returns all probes.
 	GetProbesByKind(kind ProbeKind) []Probe
 	Execute(ctx context.Context, kind ProbeKind) []ExecutionResult
 }
@@ -78,12 +81,21 @@ func (h *handler) handleEndpoints(w http.ResponseWriter, r *http.Request) {
 func (h *handler) GetProbesByKind(kind ProbeKind) []Probe {
 	pp := make([]Probe, 0)
 	for _, p := range h.probes {
+		if kind == Health {
+			pp = append(pp, p)
+			continue
+		}
+
 		if p.GetKind() == kind {
 			pp = append(pp, p)
 		}
 	}
 
 	return pp
+}
+
+func (h *handler) handleHealth(w http.ResponseWriter, r *http.Request) {
+	h.handle(w, r, Health)
 }
 
 func (h *handler) handleLiveness(w http.ResponseWriter, r *http.Request) {
@@ -94,20 +106,31 @@ func (h *handler) handleReadiness(w http.ResponseWriter, r *http.Request) {
 	h.handle(w, r, Readiness)
 }
 
+func (h *handler) handleStartup(w http.ResponseWriter, r *http.Request) {
+	h.handle(w, r, Startup)
+}
+
 func (h *handler) handle(w http.ResponseWriter, r *http.Request, kind ProbeKind) {
 	rr := h.Execute(r.Context(), kind)
 
+	var hasAtLeastOneErr bool
 	for _, r := range rr {
 		if r.Err != nil {
-			h.prometheusStatusGauge.WithLabelValues(r.Probe.GetName()).Set(1)
-			w.WriteHeader(http.StatusServiceUnavailable)
-			return
+			h.prometheusStatusGauge.WithLabelValues(string(kind), r.Probe.GetName()).Set(1)
+			hasAtLeastOneErr = true
+			continue
 		}
 
-		h.prometheusStatusGauge.WithLabelValues(r.Probe.GetName()).Set(0)
+		h.prometheusStatusGauge.WithLabelValues(string(kind), r.Probe.GetName()).Set(0)
 	}
 
-	w.WriteHeader(204)
+	if hasAtLeastOneErr {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
+	w.WriteHeader(200)
+	w.Write([]byte("OK"))
 }
 
 func (h *handler) Execute(ctx context.Context, kind ProbeKind) []ExecutionResult {
@@ -143,21 +166,27 @@ func (h *handler) initGauges(namespace string) {
 		Subsystem: "healthcheck",
 		Name:      "status",
 		Help:      "Current check status (0=success, 1=failure)",
-	}, []string{"probe"})
+	}, []string{"kind", "probe"})
 }
 
 func NewHandler(port int, executor Executor, namespace string, registry prometheus.Registerer) Handler {
 	const (
+		HealthName      = "health"
+		HealthEndpoint  = "/" + HealthName
 		MetricsName     = "metrics"
 		MetricsEndpoint = "/" + MetricsName
+		StartupName     = "startup"
+		StartupEndpoint = "/" + StartupName
 	)
 
 	h := &handler{
 		executor: executor,
 		endpoints: map[string]string{
+			string(Health):    HealthEndpoint,
 			string(Liveness):  "/live",
-			string(Readiness): "/ready",
 			MetricsName:       MetricsEndpoint,
+			string(Readiness): "/ready",
+			string(Startup):   StartupEndpoint,
 		},
 		probes: map[string]Probe{},
 	}
@@ -166,8 +195,10 @@ func NewHandler(port int, executor Executor, namespace string, registry promethe
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", h.handleEndpoints)
+	mux.HandleFunc(h.endpoints[string(Health)], h.handleHealth)
 	mux.HandleFunc(h.endpoints[string(Liveness)], h.handleLiveness)
 	mux.HandleFunc(h.endpoints[string(Readiness)], h.handleReadiness)
+	mux.HandleFunc(h.endpoints[string(Startup)], h.handleStartup)
 
 	mux.Handle(MetricsEndpoint, promhttp.Handler())
 	h.initGauges(namespace)

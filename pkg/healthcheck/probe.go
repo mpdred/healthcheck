@@ -12,8 +12,10 @@ type ProbeCheckFn func(context.Context) error
 type ProbeKind string
 
 const (
-	Readiness ProbeKind = "readiness"
+	Health    ProbeKind = "health"
 	Liveness  ProbeKind = "liveness"
+	Readiness ProbeKind = "readiness"
+	Startup   ProbeKind = "startup"
 )
 
 type Probe struct {
