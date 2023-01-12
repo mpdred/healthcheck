@@ -57,7 +57,7 @@ type ProbeBuilder interface {
 	BuildDeadmansSnitch() *Probe
 
 	// BuildForComponents creates probes base on the map's boolean values.
-	BuildForComponents(kind ProbeKind, componentsReadinessMap map[string]bool) func(roles map[string]bool) []Probe
+	BuildForComponents(kind ProbeKind, componentsReadinessMap map[string]bool) func(roles map[string]bool) []*Probe
 }
 
 type probeBuilder struct {
@@ -286,9 +286,9 @@ func (b *probeBuilder) BuildDeadmansSnitch() *Probe {
 	return b.probe
 }
 
-func (b *probeBuilder) BuildForComponents(kind ProbeKind, componentsReadinessMap map[string]bool) func(roles map[string]bool) []Probe {
-	probeFns := func(roles map[string]bool) []Probe {
-		pp := make([]Probe, 0)
+func (b *probeBuilder) BuildForComponents(kind ProbeKind, componentsOKMap map[string]bool) func(components map[string]bool) []*Probe {
+	probeFns := func(roles map[string]bool) []*Probe {
+		pp := make([]*Probe, 0)
 
 		for component, isReady := range roles {
 			if !isReady {
@@ -297,7 +297,7 @@ func (b *probeBuilder) BuildForComponents(kind ProbeKind, componentsReadinessMap
 
 			c := component
 			fn := func(ctx context.Context) error {
-				if !componentsReadinessMap[c] {
+				if !componentsOKMap[c] {
 					return errors.New("readiness for component set to 'false'")
 				}
 
@@ -310,7 +310,7 @@ func (b *probeBuilder) BuildForComponents(kind ProbeKind, componentsReadinessMap
 				WithCustomCheck(fn).
 				Build()
 
-			pp = append(pp, *p)
+			pp = append(pp, p)
 		}
 
 		return pp
