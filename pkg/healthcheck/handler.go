@@ -116,12 +116,12 @@ func (h *handler) handle(w http.ResponseWriter, r *http.Request, kind ProbeKind)
 	var hasAtLeastOneErr bool
 	for _, r := range rr {
 		if r.Err != nil {
-			h.prometheusStatusGauge.WithLabelValues(string(kind), r.Probe.GetName()).Set(1)
+			h.prometheusStatusGauge.WithLabelValues(string(r.Probe.GetKind()), r.Probe.GetName()).Set(1)
 			hasAtLeastOneErr = true
 			continue
 		}
 
-		h.prometheusStatusGauge.WithLabelValues(string(kind), r.Probe.GetName()).Set(0)
+		h.prometheusStatusGauge.WithLabelValues(string(r.Probe.GetKind()), r.Probe.GetName()).Set(0)
 	}
 
 	if hasAtLeastOneErr {
