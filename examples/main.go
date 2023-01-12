@@ -38,6 +38,7 @@ func main() {
 		WithCustomCheck(func(context.Context) error {
 			return errors.New("an unexpected error has occurred")
 		}).
+		WithSetOptional(true).
 		MustBuild()
 
 	// Register the probes

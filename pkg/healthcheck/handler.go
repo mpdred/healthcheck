@@ -123,6 +123,11 @@ func (h *handler) executionResults(w http.ResponseWriter, r *http.Request, kind 
 		p := r.Probe
 		if r.Err != "" {
 			h.prometheusStatusGauge.WithLabelValues(string(p.Kind), p.Name).Set(1)
+
+			if !p.IsInformationalOnly {
+				hasAtLeastOneErr = true
+				continue
+			}
 		}
 
 		h.prometheusStatusGauge.WithLabelValues(string(p.Kind), p.Name).Set(0)

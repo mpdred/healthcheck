@@ -24,6 +24,7 @@ import (
 type ProbeBuilder interface {
 	WithKind(k ProbeKind) ProbeBuilder
 	WithName(n string) ProbeBuilder
+	WithSetOptional(bool) ProbeBuilder
 
 	WithCustomCheck(fn ProbeCheckFn) ProbeBuilder
 
@@ -77,6 +78,12 @@ func (b *probeBuilder) WithKind(k ProbeKind) ProbeBuilder {
 
 func (b *probeBuilder) WithName(n string) ProbeBuilder {
 	b.probe.Name = n
+
+	return b
+}
+
+func (b *probeBuilder) WithSetOptional(isOptional bool) ProbeBuilder {
+	b.probe.IsInformationalOnly = isOptional
 
 	return b
 }
