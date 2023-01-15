@@ -1,4 +1,4 @@
-package healthcheck
+package factories
 
 import (
 	"context"
@@ -12,24 +12,24 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v9"
+	"github.com/mpdred/healthcheck/v2/pkg/healthcheck"
 	"github.com/opensearch-project/opensearch-go/v2"
 	"github.com/pkg/errors"
 )
 
 // ProbeBuilder creates a Probe.
-// Has some built-in ProbeCheckFn,
+// Has some predefined ProbeCheckFn(s),
 // for which it will set a predefined name if not otherwise specified by the user.
 //
 // It has a default timeout for the predefined checks.
 type ProbeBuilder interface {
-	WithKind(k ProbeKind) ProbeBuilder
+	WithKind(k healthcheck.ProbeKind) ProbeBuilder
 
 	// WithName sets a friendly name for the probe.
 	WithName(n string) ProbeBuilder
-	WithSetOptional(bool) ProbeBuilder
 
 	// WithCustomCheck allows you to define your own function that is to be executed.
-	WithCustomCheck(fn ProbeCheckFn) ProbeBuilder
+	WithCustomCheck(fn healthcheck.ProbeCheckFn) ProbeBuilder
 
 	WithDatabaseConnectionCheck(database *sql.DB) ProbeBuilder
 	WithDNSResolveCheck(host string) ProbeBuilder
@@ -40,29 +40,30 @@ type ProbeBuilder interface {
 
 	// Build the probe as requested.
 	//
-	// The ProbeKind is set to Health by default.
+	// The ProbeKind is set to CustomProbeKind by default.
 	//
 	// Note: No checks are performed, so it allows for objects with undefined fields.
-	Build() *Probe
+	Build() healthcheck.Probe
 
 	// MustBuild uses Build to build the probe as requested,
 	// and panic if there are any fields with undefined fields.
 	//
-	// The ProbeKind is set to Health by default.
-	MustBuild() *Probe
+	// The ProbeKind is set to CustomProbeKind by default.
+	MustBuild() healthcheck.Probe
 
 	// BuildDeadmansSnitch creates a Probe that always executes without errors.
+	// This can be used for readiness checks in your APIs.
 	//
 	// Usually an alert is created for its absence.
-	BuildDeadmansSnitch() *Probe
+	BuildDeadmansSnitch() healthcheck.Probe
 
 	// BuildForComponents creates probes base on the map's boolean values.
-	BuildForComponents(kind ProbeKind, components []string, componentsStatusMap map[string]bool) []*Probe
+	BuildForComponents(kind healthcheck.ProbeKind, components []string, componentsStatusMap map[string]bool) []healthcheck.Probe
 }
 
 type probeBuilder struct {
 	defaultTimeout time.Duration
-	probe          *Probe
+	probe          *healthcheck.Probe
 }
 
 func NewProbeBuilder() ProbeBuilder {
@@ -70,13 +71,13 @@ func NewProbeBuilder() ProbeBuilder {
 
 	b := probeBuilder{
 		defaultTimeout: defaultTimeout,
-		probe:          &Probe{},
+		probe:          &healthcheck.Probe{},
 	}
 
 	return &b
 }
 
-func (b *probeBuilder) WithKind(k ProbeKind) ProbeBuilder {
+func (b *probeBuilder) WithKind(k healthcheck.ProbeKind) ProbeBuilder {
 	b.probe.Kind = k
 
 	return b
@@ -88,14 +89,8 @@ func (b *probeBuilder) WithName(n string) ProbeBuilder {
 	return b
 }
 
-func (b *probeBuilder) WithSetOptional(isOptional bool) ProbeBuilder {
-	b.probe.IsInformationalOnly = isOptional
-
-	return b
-}
-
-func (b *probeBuilder) WithCustomCheck(fn ProbeCheckFn) ProbeBuilder {
-	b.probe.checkFn = fn
+func (b *probeBuilder) WithCustomCheck(fn healthcheck.ProbeCheckFn) ProbeBuilder {
+	b.probe.CheckFn = fn
 
 	return b
 }
@@ -112,7 +107,7 @@ func (b *probeBuilder) WithDatabaseConnectionCheck(database *sql.DB) ProbeBuilde
 		return database.PingContext(ctx)
 	}
 
-	b.probe.checkFn = fn
+	b.probe.CheckFn = fn
 
 	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "sql database"
@@ -141,7 +136,7 @@ func (b *probeBuilder) WithDNSResolveCheck(host string) ProbeBuilder {
 		return nil
 	}
 
-	b.probe.checkFn = fn
+	b.probe.CheckFn = fn
 
 	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "dns resolve"
@@ -175,13 +170,13 @@ func (b *probeBuilder) WithHTTPGetCheck(url string) ProbeBuilder {
 		}(resp.Body)
 
 		if resp.StatusCode >= http.StatusBadRequest {
-			return errors.Wrapf(ErrCheckFailed, "status code: %d", resp.StatusCode)
+			return errors.Wrapf(healthcheck.ErrCheckFailed, "status code: %d", resp.StatusCode)
 		}
 
 		return nil
 	}
 
-	b.probe.checkFn = fn
+	b.probe.CheckFn = fn
 
 	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "http get"
@@ -198,7 +193,7 @@ func (b *probeBuilder) WithOpensearchConnectionCheck(client *opensearch.Client) 
 		return err
 	}
 
-	b.probe.checkFn = fn
+	b.probe.CheckFn = fn
 
 	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "opensearch"
@@ -215,7 +210,7 @@ func (b *probeBuilder) WithRedisConnectionCheck(client *redis.Client) ProbeBuild
 		return out.Err()
 	}
 
-	b.probe.checkFn = fn
+	b.probe.CheckFn = fn
 
 	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "redis"
@@ -235,7 +230,7 @@ func (b *probeBuilder) WithTCPDialWithTimeoutCheck(address string) ProbeBuilder 
 		return conn.Close()
 	}
 
-	b.probe.checkFn = fn
+	b.probe.CheckFn = fn
 
 	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "tcp dial"
@@ -245,17 +240,17 @@ func (b *probeBuilder) WithTCPDialWithTimeoutCheck(address string) ProbeBuilder 
 	return b
 }
 
-func (b *probeBuilder) Build() *Probe {
+func (b *probeBuilder) Build() healthcheck.Probe {
 	b.probe.Name = strings.TrimSpace(b.probe.Name)
 
 	if strings.EqualFold(string(b.probe.Kind), "") {
-		b.probe.Kind = Health
+		b.probe.Kind = healthcheck.CustomProbeKind
 	}
 
-	return b.probe
+	return *b.probe
 }
 
-func (b *probeBuilder) MustBuild() *Probe {
+func (b *probeBuilder) MustBuild() healthcheck.Probe {
 	p := b.Build()
 
 	if strings.TrimSpace(string(p.Kind)) == "" {
@@ -266,28 +261,28 @@ func (b *probeBuilder) MustBuild() *Probe {
 		panic("no probe name")
 	}
 
-	if p.checkFn == nil {
+	if p.CheckFn == nil {
 		panic("no probe check function")
 	}
 
 	return p
 }
 
-func (b *probeBuilder) BuildDeadmansSnitch() *Probe {
+func (b *probeBuilder) BuildDeadmansSnitch() healthcheck.Probe {
 	fn := func(context.Context) error { return nil }
 
-	b.probe.checkFn = fn
+	b.probe.CheckFn = fn
 
 	const defaultName = "dead man's snitch"
 	b.WithName(defaultName)
 
-	b.probe.Kind = Liveness
+	b.probe.Kind = healthcheck.LivenessProbeKind
 
-	return b.probe
+	return *b.probe
 }
 
-func (b *probeBuilder) BuildForComponents(kind ProbeKind, components []string, componentsStatusMap map[string]bool) []*Probe {
-	pp := make([]*Probe, 0)
+func (b *probeBuilder) BuildForComponents(kind healthcheck.ProbeKind, components []string, componentsStatusMap map[string]bool) []healthcheck.Probe {
+	pp := make([]healthcheck.Probe, 0)
 
 	for _, component := range components {
 		c := component
@@ -309,5 +304,4 @@ func (b *probeBuilder) BuildForComponents(kind ProbeKind, components []string, c
 	}
 
 	return pp
-
 }
