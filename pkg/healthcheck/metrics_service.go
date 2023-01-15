@@ -17,19 +17,11 @@ type MetricsService interface {
 
 type noopMetricsService struct{}
 
-func (s noopMetricsService) GetHandler() http.Handler {
-	return http.NewServeMux()
-}
+func (s noopMetricsService) GetHandler() http.Handler { return http.NewServeMux() }
 
-func (s noopMetricsService) UpdateGauge(...ExecutionResult) {
-	return
-}
+func (s noopMetricsService) UpdateGauge(...ExecutionResult) {}
 
-func NewNoOpMetricsService() MetricsService {
-	s := &noopMetricsService{}
-
-	return s
-}
+func NewNoOpMetricsService() MetricsService { return &noopMetricsService{} }
 
 type prometheusMetricsService struct {
 	statusGauge *prometheus.GaugeVec
