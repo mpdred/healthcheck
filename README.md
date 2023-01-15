@@ -94,7 +94,7 @@ E.g.:
 
 ## Probes
 
-Probes are the building block of this library, and some predefined checks for probes have been defined in [ProbeBuilder](./pkg/factories/Probe.go). This includes HTTP GET, DNS resolve, and TCP dial calls, and SQL, Redis, and Opensearch connectivity checks.
+Probes are the building block of this library, and some predefined checks for probes have been defined in [ProbeBuilder](./pkg/factories/probe.go). This includes HTTP GET, DNS resolve, and TCP dial calls, and SQL, Redis, and Opensearch connectivity checks.
 
 The probe checks are done async,
 
