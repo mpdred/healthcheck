@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"log"
-	"time"
+	"net/http"
 
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/mpdred/healthcheck/v2/pkg/factories"
 	"github.com/mpdred/healthcheck/v2/pkg/healthcheck"
-	"github.com/pkg/errors"
 )
 
 func main() {
@@ -29,50 +30,48 @@ func main() {
 	log.Println("create probes ...")
 	deadmansProbe := factories.NewProbeBuilder().BuildDeadmansSnitch()
 
-	dialCheckProbe := factories.NewProbeBuilder().
-		WithTCPDialWithTimeoutCheck("google.com:443").
-		WithKind(healthcheck.StartupProbeKind).
-		Build()
-
-	httpCheckProbe := factories.NewProbeBuilder().
-		WithHTTPGetCheck("https://www.google.com").
-		WithKind(healthcheck.ReadinessProbeKind).
-		Build()
-
-	customProbe := factories.NewProbeBuilder().
-		WithName("my custom probe").
-		WithKind(healthcheck.CustomProbeKind).
-		WithCustomCheck(func(context.Context) error {
-			return errors.New("an unexpected error has occurred")
-		}).
-		MustBuild()
-
 	log.Println("register probes ...")
-	probeStore.Add(deadmansProbe, dialCheckProbe, httpCheckProbe, customProbe)
+	probeStore.Add(deadmansProbe)
 
-	log.Println("keeping the http server open for you ...")
-	time.Sleep(5 * time.Minute)
-	log.Println("main() finished")
+	// Now let's assume that you have an echoserver (https://github.com/labstack/echo) running,
+	// and you wish echoserver to handle the probe we just created.
+
+	// Echo instance
+	e := echo.New()
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
+
+	e.GET("/", hello)
+
+	// Now we will add the routes of the Healthcheck
+	for _, endpointDefinition := range endpointDefinitions {
+		e.Any(endpointDefinition.Endpoint, endpointDefinition.GetHandleFuncForEchoServer())
+	}
+
+	e.Logger.Fatal(e.Start(":1323"))
 
 	// You can now check the /live, /ready, /health, or /metrics endpoint.
 	// E.g.:
 
-	// $ curl -v localhost:5059/live
-	// *   Trying 127.0.0.1:5059...
-	// * Connected to localhost (127.0.0.1) port 5059 (#0)
+	// $ curl localhost:1323/live -v
+	// *   Trying 127.0.0.1:1323...
+	// * Connected to localhost (127.0.0.1) port 1323 (#0)
 	// > GET /live HTTP/1.1
-	// > Host: localhost:5059
+	// > Host: localhost:1323
 	// > User-Agent: curl/7.85.0
 	// > Accept: */*
 	// >
 	// * Mark bundle as not supporting multiuse
 	// < HTTP/1.1 200 OK
-	// < Date: Sun, 15 Jan 2023 16:04:58 GMT
+	// < Date: Sun, 15 Jan 2023 17:27:51 GMT
 	// < Content-Length: 0
 	// <
 	// * Connection #0 to host localhost left intact
 
-	// $ curl -v localhost:5059/metrics | grep health
+	// Now if we check the metrics on the healthcheck server (mux),
+	// we can see that the probe execution has been recorded.
+
+	// $ curl localhost:5059/metrics -v | grep health
 	// *   Trying 127.0.0.1:5059...
 	//  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
 	//                                 Dload  Upload   Total   Spent    Left  Speed
@@ -85,16 +84,18 @@ func main() {
 	// * Mark bundle as not supporting multiuse
 	// < HTTP/1.1 200 OK
 	// < Content-Type: text/plain; version=0.0.4; charset=utf-8
-	// < Date: Sun, 15 Jan 2023 16:06:02 GMT
+	// < Date: Sun, 15 Jan 2023 17:28:48 GMT
 	// < Transfer-Encoding: chunked
 	// <
-	// { [5468 bytes data]
-	// 100  5442    0  5442    0     0   745k      0 --:--:-- --:--:-- --:--:-- 5314k
+	// { [3956 bytes data]
+	// 100  5038    0  5038    0     0   682k      0 --:--:-- --:--:-- --:--:-- 4919k
 	// * Connection #0 to host localhost left intact
-	// # HELP my_namespace_healthcheck_status Current probe check status (0=healthy, 1=degraded, 2=unhealthy)
+	// # HELP my_namespace_healthcheck_status Current probe check status (0=healthy, 1=unhealthy)
 	// # TYPE my_namespace_healthcheck_status gauge
-	// my_namespace_healthcheck_status{error="",kind="liveness",probe="dead man's snitch"} 0
-	// my_namespace_healthcheck_status{error="",kind="readiness",probe="http get"} 0
-	// my_namespace_healthcheck_status{error="",kind="startup",probe="tcp dial"} 0
-	// my_namespace_healthcheck_status{error="an unexpected error has occurred",kind="health",probe="my custom probe"} 1
+	// my_namespace_healthcheck_status{kind="liveness",probe="dead man's snitch"} 0
+}
+
+// Handler
+func hello(c echo.Context) error {
+	return c.String(http.StatusOK, "Hello, World!")
 }
