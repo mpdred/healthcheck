@@ -1,4 +1,4 @@
-# healthcheck
+# healthcheck ![go version](https://img.shields.io/github/go-mod/go-version/mpdred/healthcheck) ![GitHub Actions](https://img.shields.io/github/actions/workflow/status/mpdred/healthcheck/go.yaml) ![tag](https://img.shields.io/github/v/tag/mpdred/healthcheck) ![last commit](https://img.shields.io/github/last-commit/mpdred/healthcheck)
 
 [(source)](https://github.com/mpdred/healthcheck)
 
