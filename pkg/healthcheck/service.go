@@ -77,7 +77,7 @@ func (s service) executeProbes(ctx context.Context, probes []Probe) []ExecutionR
 }
 
 func (s service) ExecuteProbesByKind(ctx context.Context, kind ProbeKind) ([]ExecutionResult, error) {
-	probes := make([]Probe, 0)
+	var probes []Probe
 
 	if kind == CustomProbeKind {
 		probes = s.probeStore.GetAll()
