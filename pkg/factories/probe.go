@@ -47,14 +47,18 @@ type ProbeBuilder interface {
 	// The ProbeKind is set to CustomProbeKind by default.
 	MustBuild() healthcheck.Probe
 
-	// BuildDeadmansSnitch creates a Probe that always executes without errors.
+	// BuildLivenessProbe creates a Probe that always executes without errors.
+	//
 	// This can be used for readiness checks in your APIs.
+	BuildLivenessProbe() healthcheck.Probe
+
+	// BuildDeadmansSnitch creates a Probe that always returns an error.
 	//
 	// Usually an alert is created for its absence.
 	BuildDeadmansSnitch() healthcheck.Probe
 
 	// BuildForComponents creates probes base on the map's boolean values.
-	BuildForComponents(kind healthcheck.ProbeKind, components []string, componentsStatusMap map[string]bool) []healthcheck.Probe
+	BuildForComponents(kind healthcheck.ProbeKind, componentsStatusMap map[string]bool) []healthcheck.Probe
 }
 
 type probeBuilder struct {
@@ -230,24 +234,36 @@ func (b *probeBuilder) MustBuild() healthcheck.Probe {
 	return p
 }
 
-func (b *probeBuilder) BuildDeadmansSnitch() healthcheck.Probe {
+func (b *probeBuilder) BuildLivenessProbe() healthcheck.Probe {
+	const defaultName = "liveness"
 	fn := func(context.Context) error { return nil }
 
-	b.probe.CheckFn = fn
+	probe := b.WithName(defaultName).
+		WithCustomCheck(fn).
+		WithKind(healthcheck.LivenessProbeKind).
+		MustBuild()
 
-	const defaultName = "dead man's snitch"
-	b.WithName(defaultName)
-
-	b.probe.Kind = healthcheck.LivenessProbeKind
-
-	return *b.probe
+	return probe
 }
 
-func (b *probeBuilder) BuildForComponents(kind healthcheck.ProbeKind, components []string, componentsStatusMap map[string]bool) []healthcheck.Probe {
-	pp := make([]healthcheck.Probe, 0)
+func (b *probeBuilder) BuildDeadmansSnitch() healthcheck.Probe {
+	const defaultName = "dead man's snitch"
+	fn := func(context.Context) error { return errors.New(defaultName) }
 
-	for _, component := range components {
+	probe := b.WithName(defaultName).
+		WithCustomCheck(fn).
+		WithKind(healthcheck.LivenessProbeKind).
+		MustBuild()
+
+	return probe
+}
+
+func (b *probeBuilder) BuildForComponents(kind healthcheck.ProbeKind, componentsStatusMap map[string]bool) []healthcheck.Probe {
+	probes := make([]healthcheck.Probe, 0)
+
+	for component := range componentsStatusMap {
 		c := component
+
 		fn := func(ctx context.Context) error {
 			if !componentsStatusMap[c] {
 				return errors.New("readiness for component set to 'false'")
@@ -262,8 +278,8 @@ func (b *probeBuilder) BuildForComponents(kind healthcheck.ProbeKind, components
 			WithCustomCheck(fn).
 			Build()
 
-		pp = append(pp, p)
+		probes = append(probes, p)
 	}
 
-	return pp
+	return probes
 }

@@ -26,8 +26,6 @@ func main() {
 	defer healthcheck.StopHTTPServer(httpServer)
 	log.Println("http server started")
 
-	components := []string{"foo", "bar", "baz"}
-
 	// You can make a map of your components and use it to decide if the app is ready or not.
 	componentsStatus := map[string]bool{
 		"foo": true,
@@ -35,7 +33,7 @@ func main() {
 		"baz": true,
 	}
 
-	probes := factories.NewProbeBuilder().BuildForComponents(healthcheck.ReadinessProbeKind, components, componentsStatus)
+	probes := factories.NewProbeBuilder().BuildForComponents(healthcheck.ReadinessProbeKind, componentsStatus)
 
 	log.Println("register probes ...")
 	probeStore.Add(probes...)
