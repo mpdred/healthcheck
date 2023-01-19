@@ -11,9 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v9"
 	"github.com/mpdred/healthcheck/v2/pkg/healthcheck"
-	"github.com/opensearch-project/opensearch-go/v2"
 	"github.com/pkg/errors"
 )
 
@@ -34,8 +32,6 @@ type ProbeBuilder interface {
 	WithDatabaseConnectionCheck(database *sql.DB) ProbeBuilder
 	WithDNSResolveCheck(host string) ProbeBuilder
 	WithHTTPGetCheck(url string) ProbeBuilder
-	WithOpensearchConnectionCheck(client *opensearch.Client) ProbeBuilder
-	WithRedisConnectionCheck(client *redis.Client) ProbeBuilder
 	WithTCPDialWithTimeoutCheck(address string) ProbeBuilder
 
 	// Build the probe as requested.
@@ -180,40 +176,6 @@ func (b *probeBuilder) WithHTTPGetCheck(url string) ProbeBuilder {
 
 	if strings.TrimSpace(b.probe.Name) == "" {
 		const defaultName = "http get"
-		b.WithName(defaultName)
-	}
-
-	return b
-}
-
-func (b *probeBuilder) WithOpensearchConnectionCheck(client *opensearch.Client) ProbeBuilder {
-	fn := func(context.Context) error {
-		_, err := client.Ping()
-
-		return err
-	}
-
-	b.probe.CheckFn = fn
-
-	if strings.TrimSpace(b.probe.Name) == "" {
-		const defaultName = "opensearch"
-		b.WithName(defaultName)
-	}
-
-	return b
-}
-
-func (b *probeBuilder) WithRedisConnectionCheck(client *redis.Client) ProbeBuilder {
-	fn := func(ctx context.Context) error {
-		out := client.Ping(ctx)
-
-		return out.Err()
-	}
-
-	b.probe.CheckFn = fn
-
-	if strings.TrimSpace(b.probe.Name) == "" {
-		const defaultName = "redis"
 		b.WithName(defaultName)
 	}
 
