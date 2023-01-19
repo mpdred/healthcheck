@@ -2,26 +2,12 @@ package healthcheck
 
 import (
 	"net/http"
-
-	"github.com/labstack/echo/v4"
 )
 
 type EndpointDefinition struct {
 	Name       string
 	Endpoint   string
 	HandleFunc func(h http.ResponseWriter, r *http.Request)
-}
-
-// GetHandleFuncForEchoServer returns a handlerfunc that is compatible with echo server (https://github.com/labstack/echo).
-func (d EndpointDefinition) GetHandleFuncForEchoServer() echo.HandlerFunc {
-	fn := func(c echo.Context) error {
-		d.HandleFunc(c.Response(), c.Request())
-
-		return nil
-	}
-
-	return fn
-
 }
 
 const (

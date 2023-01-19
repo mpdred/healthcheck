@@ -1,3 +1,4 @@
+```go
 package main
 
 import (
@@ -45,7 +46,16 @@ func main() {
 
 	// Now we will add the routes of the Healthcheck
 	for _, endpointDefinition := range endpointDefinitions {
-		e.Any(endpointDefinition.Endpoint, endpointDefinition.GetHandleFuncForEchoServer())
+		def := endpointDefinition
+
+		// Define a handle func that is compatible with echo server
+		fn := func(c echo.Context) error {
+			def.HandleFunc(c.Response(), c.Request())
+
+			return nil
+		}
+
+		e.Any(endpointDefinition.Endpoint, fn)
 	}
 
 	e.Logger.Fatal(e.Start(":1323"))
@@ -62,9 +72,8 @@ func main() {
 	// > Accept: */*
 	// >
 	// * Mark bundle as not supporting multiuse
-	// < HTTP/1.1 200 OK
+	// < HTTP/1.1 204 No Content
 	// < Date: Sun, 15 Jan 2023 17:27:51 GMT
-	// < Content-Length: 0
 	// <
 	// * Connection #0 to host localhost left intact
 
@@ -99,3 +108,5 @@ func main() {
 func hello(c echo.Context) error {
 	return c.String(http.StatusOK, "Hello, World!")
 }
+
+```
