@@ -66,9 +66,8 @@ func main() {
 	// > Accept: */*
 	// >
 	// * Mark bundle as not supporting multiuse
-	// < HTTP/1.1 200 OK
+	// < HTTP/1.1 204 No Content
 	// < Date: Sun, 15 Jan 2023 16:04:58 GMT
-	// < Content-Length: 0
 	// <
 	// * Connection #0 to host localhost left intact
 
