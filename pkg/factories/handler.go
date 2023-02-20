@@ -1,7 +1,9 @@
 package factories
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/mpdred/healthcheck/v2/pkg/healthcheck"
@@ -63,14 +65,32 @@ func getProbeExecutionFns(service healthcheck.Service) map[healthcheck.ProbeKind
 				}
 			}
 
+			var isProbeCheckFailed bool
+			errMessages := map[string]string{}
 			for _, executionResult := range executionResults {
 				if executionResult.Probe.Health == healthcheck.UnhealthyStatus {
-					w.WriteHeader(http.StatusServiceUnavailable)
-					return
+					isProbeCheckFailed = true
+					errMessages[executionResult.Probe.Name] = executionResult.Err.Error()
 				}
 			}
 
-			w.WriteHeader(http.StatusNoContent)
+			if !isProbeCheckFailed {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+
+			w.WriteHeader(http.StatusServiceUnavailable)
+
+			jsonStr, err := json.Marshal(errMessages)
+			if err != nil {
+				log.Printf("Error: %s\n", err.Error())
+			}
+
+			_, err = w.Write(jsonStr)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				log.Println(err)
+			}
 		}
 
 		probeFns[k] = fn
