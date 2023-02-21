@@ -43,8 +43,15 @@ func GetEndpointDefinitions(service healthcheck.Service) []healthcheck.EndpointD
 }
 
 func getProbeExecutionFns(service healthcheck.Service) map[healthcheck.ProbeKind]func(w http.ResponseWriter, r *http.Request) {
+	kinds := []healthcheck.ProbeKind{
+		healthcheck.StartupProbeKind,
+		healthcheck.LivenessProbeKind,
+		healthcheck.ReadinessProbeKind,
+		healthcheck.CustomProbeKind,
+	}
+
 	probeFns := map[healthcheck.ProbeKind]func(w http.ResponseWriter, r *http.Request){}
-	for _, kind := range []healthcheck.ProbeKind{healthcheck.StartupProbeKind, healthcheck.LivenessProbeKind, healthcheck.ReadinessProbeKind, healthcheck.CustomProbeKind} {
+	for _, kind := range kinds {
 		k := kind
 		fn := func(w http.ResponseWriter, r *http.Request) {
 			var executionResults []healthcheck.ExecutionResult

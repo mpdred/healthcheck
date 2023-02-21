@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/mpdred/healthcheck/v2/pkg/factories"
@@ -50,7 +53,9 @@ func main() {
 	}()
 
 	log.Println("keeping the http server open for you ...")
-	time.Sleep(5 * time.Minute)
+	fmt.Println("Press <Enter> to exit...")
+	input := bufio.NewScanner(os.Stdin)
+	input.Scan()
 	log.Println("main() finished")
 
 	// You can now check the /live, /ready, /health, or /metrics endpoint.

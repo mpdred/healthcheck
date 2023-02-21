@@ -25,10 +25,11 @@ func NewNoOpMetricsService() MetricsService { return &noopMetricsService{} }
 
 type prometheusMetricsService struct {
 	statusGauge *prometheus.GaugeVec
+	handler     http.Handler
 }
 
 func (s prometheusMetricsService) GetHandler() http.Handler {
-	return promhttp.Handler()
+	return s.handler
 }
 
 func (s prometheusMetricsService) UpdateGauge(executionResults ...ExecutionResult) {
@@ -64,6 +65,25 @@ func NewPrometheusMetricsService(namespace string) MetricsService {
 
 	s := &prometheusMetricsService{
 		statusGauge: statusGauge,
+		handler:     promhttp.Handler(),
+	}
+
+	return s
+}
+
+func NewPrometheusMetricsServiceWithHandler(namespace string, reg prometheus.Registerer, promHandler http.Handler) MetricsService {
+	statusGauge := promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Subsystem: "healthcheck",
+		Name:      "status",
+		Help:      fmt.Sprintf("Current probe check status (0=%s, 1=%s)", HealthyStatus, UnhealthyStatus),
+	}, []string{"kind", "probe"})
+
+	reg.MustRegister(statusGauge)
+
+	s := &prometheusMetricsService{
+		statusGauge: statusGauge,
+		handler:     promHandler,
 	}
 
 	return s
