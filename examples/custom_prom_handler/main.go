@@ -25,9 +25,7 @@ func main() {
 		Registry: reg,
 	}
 
-	promHandler := promhttp.HandlerFor(reg, opts)
-
-	metricsService := healthcheck.NewPrometheusMetricsServiceWithHandler("my_namespace", reg, promHandler)
+	metricsService := healthcheck.NewPrometheusMetricsServiceWithHandler("my_namespace", reg, opts)
 	service := healthcheck.NewService(probeStore, metricsService)
 
 	endpointDefinitions := factories.GetEndpointDefinitions(service)

@@ -71,7 +71,7 @@ func NewPrometheusMetricsService(namespace string) MetricsService {
 	return s
 }
 
-func NewPrometheusMetricsServiceWithHandler(namespace string, reg prometheus.Registerer, promHandler http.Handler) MetricsService {
+func NewPrometheusMetricsServiceWithHandler(namespace string, reg *prometheus.Registry, opts promhttp.HandlerOpts) MetricsService {
 	statusGauge := promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespace,
 		Subsystem: "healthcheck",
@@ -81,9 +81,11 @@ func NewPrometheusMetricsServiceWithHandler(namespace string, reg prometheus.Reg
 
 	reg.MustRegister(statusGauge)
 
+	handler := promhttp.HandlerFor(reg, opts)
+
 	s := &prometheusMetricsService{
 		statusGauge: statusGauge,
-		handler:     promHandler,
+		handler:     handler,
 	}
 
 	return s
